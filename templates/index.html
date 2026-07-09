@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Deteksi Wajah & Gerakan</title>
+  <style>
+    body { font-family: "Segoe UI", sans-serif; background: #f8fafc; color: #1f2937; margin: 0; padding: 20px; }
+    h1 { color: #2563eb; }
+    header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; }
+    button { background: #2563eb; color: #fff; border: none; padding: 8px 12px; border-radius: 6px; cursor: pointer; }
+    button:hover { opacity: 0.9; }
+    .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 15px; }
+    .card { background: #fff; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); text-align: center; overflow: hidden; }
+    .card img { width: 100%; height: 180px; object-fit: cover; }
+    .info { padding: 10px; }
+    .delete-btn { background: #ef4444; padding: 6px 10px; border: none; border-radius: 6px; color: #fff; cursor: pointer; }
+    .delete-btn:hover { opacity: 0.9; }
+    #regModal { display: none; background: #fff; padding: 20px; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); max-width: 400px; margin: auto; }
+    video { border-radius: 8px; width: 100%; margin-top: 10px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Deteksi Wajah & Gerakan</h1>
+    <button id="showReg">Daftarkan Wajah Baru</button>
+  </header>
+
+  {% if detection %}
+  <div class="gallery">
+    {% for capture in detection %}
+    <div class="card">
+      <img src="/image/{{ capture.id }}" alt="Capture">
+      <div class="info">
+        <b>{{ capture.event_type|capitalize }}</b>
+        <div>{{ capture.capture_time }}</div>
+        <button class="delete-btn" data-id="{{ capture.id }}">Hapus</button>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p style="text-align:center; color:#6b7280;">Belum ada data deteksi.</p>
+  {% endif %}
+
+  <!-- Modal Registrasi -->
+  <div id="regModal">
+    <h2>Daftarkan Wajah</h2>
+    <input type="text" id="name" placeholder="Nama" required style="width:100%; padding:8px;">
+    <video id="video" autoplay muted playsinline></video>
+    <br>
+    <button id="captureBtn">Ambil Foto</button>
+    <button id="closeReg" style="background:#9ca3af;">Tutup</button>
+  </div>
+
+  <script>
+    const regModal = document.getElementById("regModal");
+    const video = document.getElementById("video");
+
+    document.getElementById("showReg").onclick = async () => {
+      regModal.style.display = "block";
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        video.srcObject = stream;
+        await video.play();
+      } catch (err) {
+        alert("Tidak bisa mengakses kamera. Aktifkan izin kamera browser Anda.");
+        console.error("Camera error:", err);
+      }
+    };
+
+    document.getElementById("closeReg").onclick = () => {
+      regModal.style.display = "none";
+      if (video.srcObject) {
+        video.srcObject.getTracks().forEach(track => track.stop());
+      }
+    };
+
+    document.getElementById("captureBtn").onclick = async () => {
+      const name = document.getElementById("name").value.trim();
+      if (!name) return alert("Masukkan nama terlebih dahulu.");
+
+      const canvas = document.createElement("canvas");
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(video, 0, 0);
+      const imageData = canvas.toDataURL("image/jpeg");
+
+      const res = await fetch("/register_face", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, image: imageData })
+      });
+      const data = await res.json();
+      alert(data.message);
+    };
+
+    document.querySelectorAll(".delete-btn").forEach(btn => {
+      btn.onclick = () => {
+        if (confirm("Hapus gambar ini?")) {
+          fetch(`/delete/${btn.dataset.id}`, { method: "POST" })
+            .then(r => r.json())
+            .then(() => btn.closest(".card").remove());
+        }
+      };
+    });
+  </script>
+</body>
+</html>
